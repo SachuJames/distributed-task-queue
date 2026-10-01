@@ -116,9 +116,8 @@ rules (`S`) mean things like `random.uniform` for jitter need an explicit
 
 - Small, logical commits: one behavior or fix per commit, with a message that
   says what changed and why.
-- Never reference AI tooling, generated work, or automation in commit
-  messages, code comments, or docs. Write commits that read like a developer
-  wrote them.
+- Write commit messages that read like a developer wrote them: say what
+  changed and why, with no meta-commentary about process or tooling.
 - Do not commit secrets, `.env` files, or local test artifacts.
 - Update `CONTRACT.md` only when the spec itself changes; when the code
   intentionally diverges, note the difference in `docs/` instead.
