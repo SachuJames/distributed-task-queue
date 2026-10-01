@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "distributed-task-queue"
+version = "0.1.0"
+description = "A Redis Streams-backed distributed task queue engine with retries, idempotency, dead-letter queues, backpressure, and real-time observability."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Sachu James" }]
+dependencies = [
+    "fastapi>=0.115,<0.118",
+    "uvicorn[standard]>=0.30,<0.34",
+    "pydantic>=2.9,<2.12",
+    "pydantic-settings>=2.5,<2.9",
+    "redis>=5.2,<7",
+    "prometheus_client>=0.20,<0.23",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<0.27",
+    "httpx>=0.27,<0.29",
+]
+lint = [
+    "ruff>=0.7,<0.10",
+    "mypy>=1.13,<1.17",
+]
+
+[project.scripts]
+dtq = "dtq_cli.cli:main"
+
+[tool.setuptools]
+packages = [
+    "dtq_core",
+    "dtq_config",
+    "dtq_queue",
+    "dtq_retry",
+    "dtq_idem",
+    "dtq_events",
+    "dtq_metrics",
+    "dtq_tasks",
+    "dtq_api",
+    "dtq_worker",
+    "dtq_cli",
+]
+
+[tool.setuptools.package-dir]
+dtq_core = "packages/core/dtq_core"
+dtq_config = "packages/config/dtq_config"
+dtq_queue = "packages/queue/dtq_queue"
+dtq_retry = "packages/retry/dtq_retry"
+dtq_idem = "packages/idempotency/dtq_idem"
+dtq_events = "packages/events/dtq_events"
+dtq_metrics = "packages/metrics/dtq_metrics"
+dtq_tasks = "packages/tasks/dtq_tasks"
+dtq_api = "apps/api/dtq_api"
+dtq_worker = "apps/worker/dtq_worker"
+dtq_cli = "apps/cli/dtq_cli"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.flake8-bandit]
+check-typed-exception = true
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["tests/*"]

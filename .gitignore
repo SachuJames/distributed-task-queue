@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node
+apps/dashboard/node_modules/
+apps/dashboard/dist/
+
+# Env and local secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Redis / data
+*.rdb
+*.aof
+dump.rdb
+data/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
