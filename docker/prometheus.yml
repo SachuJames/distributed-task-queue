@@ -1,0 +1,24 @@
+# Prometheus scrape config for the DTQ stack.
+# The API exposes Prometheus metrics at /metrics on port 8000.
+# Each worker exposes its own /metrics on DTQ_WORKER_METRICS_PORT (default 8001).
+#
+# Scaling caveat: with `docker compose up --scale worker=3`, all replicas share
+# the service name "worker" and Docker's internal DNS round-robins between them,
+# so this static target scrapes only one replica per interval. For per-replica
+# worker metrics at scale, run each worker with a distinct published metrics
+# port or use a discovery mechanism that lists every replica.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "dtq-api"
+    static_configs:
+      - targets: ["api:8000"]
+    metrics_path: /metrics
+
+  - job_name: "dtq-worker"
+    static_configs:
+      - targets: ["worker:8001"]
+    metrics_path: /metrics

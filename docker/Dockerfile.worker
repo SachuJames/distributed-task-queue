@@ -1,0 +1,28 @@
+# DTQ worker image. Runs the worker as a non-root user.
+# Exposes its own Prometheus /metrics on DTQ_WORKER_METRICS_PORT (default 8001).
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DTQ_WORKER_METRICS_PORT=8001 \
+    PYTHONPATH=/app
+
+RUN groupadd --system dtq && useradd --system --gid dtq --create-home dtq
+
+WORKDIR /app
+COPY pyproject.toml README.md LICENSE ./
+COPY packages/ packages/
+COPY apps/worker/ apps/worker/
+COPY apps/cli/ apps/cli/
+COPY examples/ examples/
+
+RUN pip install --upgrade pip && pip install .
+
+USER dtq
+EXPOSE 8001
+
+# The worker serves /metrics on DTQ_WORKER_METRICS_PORT; there is no HTTP
+# readiness probe on the worker, so the container is considered healthy when
+# the process is alive. Orchestrators should watch worker heartbeats instead.
+CMD ["dtq", "worker", "run"]

@@ -1,0 +1,97 @@
+# DTQ full stack. Bring up with: docker compose up --build
+# Scale workers with: docker compose up --build --scale worker=3
+#
+# Ports:
+#   api:        http://localhost:8000  (/api/v1, /health, /ready, /metrics, /ws/events)
+#   dashboard:  http://localhost:3000
+#   prometheus: http://localhost:9090
+# Redis has no host port by default (internal network only), per the contract.
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - dtq
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DTQ_REDIS_URL: redis://redis:6379/0
+      DTQ_API_HOST: 0.0.0.0
+      DTQ_API_PORT: 8000
+    networks:
+      - dtq
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DTQ_REDIS_URL: redis://redis:6379/0
+      DTQ_WORKER_METRICS_PORT: 8001
+    networks:
+      - dtq
+    # No host port published by default. Each replica serves /metrics on its
+    # own container port 8001; see docker/prometheus.yml for the scaling caveat.
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - dtq
+    ports:
+      - "3000:8080"
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - dtq
+    ports:
+      - "9090:9090"
+
+networks:
+  dtq:
+    driver: bridge
+
+volumes:
+  redis-data:
