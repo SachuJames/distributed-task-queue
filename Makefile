@@ -45,7 +45,7 @@ demo:
 	bash scripts/demo.sh
 
 load-test:
-	$(PY) scripts/load_test.py --scenario burst
+	$(PY) scripts/load_test.py --tasks 2000 --workers 4
 
 docker-up:
 	docker compose up --build -d
