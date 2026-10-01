@@ -8,6 +8,7 @@ serially on db 0.
 """
 
 import os
+from typing import cast
 
 import pytest
 import pytest_asyncio
@@ -18,8 +19,9 @@ TEST_DB = int(os.environ.get("DTQ_TEST_REDIS_DB", "0"))
 
 
 def make_redis(db: int = TEST_DB) -> Redis:
-    return Redis.from_url(
-        f"{REDIS_URL}/{db}", decode_responses=True, socket_timeout=5
+    return cast(
+        Redis,
+        Redis.from_url(f"{REDIS_URL}/{db}", decode_responses=True, socket_timeout=5),
     )
 
 
