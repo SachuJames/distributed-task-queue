@@ -27,7 +27,7 @@ from dtq_worker.events import TASK_QUEUED, publish_event
 from dtq_worker.worker import Worker
 from redis.asyncio import Redis
 
-TEST_DB = int(os.environ.get("DTQ_TEST_REDIS_DB", "3"))
+TEST_DB = int(os.environ.get("DTQ_TEST_REDIS_DB", "0"))
 
 log = logging.getLogger("tests.fixtures.worker_helpers")
 
