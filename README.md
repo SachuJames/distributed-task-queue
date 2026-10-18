@@ -1,87 +1,51 @@
-# dtq: Distributed Task Queue Engine
+<div align="center">
 
-dtq is a Redis Streams-backed distributed task queue in Python. Producers
-submit JSON tasks over HTTP; workers claim them from priority-ordered
-streams, execute registered handlers with timeouts and retries, and move
-exhausted tasks to a dead-letter stream. It ships with an HTTP API, a CLI, a
-real-time dashboard, and Prometheus metrics, and it runs locally with one
-`docker compose up`.
+# dtq
 
-## Key features
+**A distributed task queue on Redis Streams, with the operational parts actually built.**
 
-- **Strict priority queues**: ten priority bands per queue (p9 down to p0),
-  each a Redis Stream with a shared `workers` consumer group.
-- **At-least-once execution**: read, validate, execute, record, then ACK.
-  Crash redelivery via `XAUTOCLAIM`; duplicate entries are absorbed, never
-  executed as new work.
-- **Retries with backoff**: exponential backoff with jitter, capped delay,
-  per-attempt error classification. Only retryable errors retry; everything
-  else fails fast to the DLQ.
-- **Idempotent ingest**: `Idempotency-Key` header scoped per queue; replays
-  return the stored task, in-flight duplicates get 409.
-- **Dead-letter stream**: bounded, inspectable, with requeue (attempt reset,
-  history preserved), discard, and purge, all audit-logged.
-- **Backpressure**: queue-depth admission gate (429 with `Retry-After`),
-  payload size cap (413), bounded worker prefetch, bounded WS buffers.
-- **Observability**: Prometheus metrics, `/health` vs `/ready`, structured
-  JSON logs, a WebSocket event stream, and an audit stream for admin actions.
-- **Delayed tasks**: `delay_seconds` parks tasks in the retry schedule until
-  they are due.
-- **Task cancellation**: cooperative cancel for queued and running tasks.
-- **Single-binary ops story**: `docker compose up` gives you Redis, API,
-  worker, dashboard, and Prometheus.
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)
+![Redis Streams](https://img.shields.io/badge/redis-streams-DC382D.svg)
 
-## Architecture
+</div>
 
-```
-                    +------------------+
-                    |    dashboard     |  React SPA + WebSocket client (:3000)
-                    +--------+---------+
-                             |  REST + WS /ws/events
-                    +--------v---------+
-                    |       api        |  FastAPI (:8000)
-                    |  ingest, reads,  |  /api/v1, /health, /ready, /metrics
-                    |  admin, WS fanout |
-                    +--------+---------+
-                             |
-              +--------------v---------------+
-              |            redis             |  streams, hashes, schedules,
-              |  dtq:stream:<queue>:p<0-9>   |  DLQ, idempotency keys, audit,
-              |  dtq:retry:schedule          |  worker heartbeats, pub/sub
-              |  dtq:stream:dead-letter      |
-              +--------------^---------------+
-                             |
-              +--------------+---------------+
-              |      worker (x N)            |  poll / reaper / scheduler /
-              |  dtq worker run              |  heartbeat loops, executors
-              +------------------------------+
-```
+dtq takes JSON tasks over HTTP, runs them on a pool of workers, and keeps
+running them until they succeed, fail for good, or land in the dead-letter
+stream where you can inspect and requeue them. Priorities, retries with
+backoff, idempotent submission, delayed tasks, backpressure, Prometheus
+metrics, a live dashboard. One `docker compose up` and all of it is running.
 
-A task's life: `POST /api/v1/tasks` validates and writes the task hash, then
-XADDs to the priority stream (or parks it in the retry schedule when
-delayed). Workers XREADGROUP with bounded prefetch, claim the entry
-atomically (`QUEUED -> RUNNING` via Lua), execute the registered handler with
-a timeout, record the outcome, publish the lifecycle event, and only then
-XACK. Failures schedule retries; exhausted tasks go to the dead-letter
-stream. One worker at a time holds the scheduler leader lock and moves due
-retries back into the streams.
+I built it on Redis Streams rather than a list-based queue because streams
+already solve the hard parts: consumer groups, pending entries, and claiming
+work from a dead consumer. The engine is the code around that: claim
+atomically, execute, record the outcome, and only then acknowledge.
 
-## Quickstart
-
-### With docker compose
+## Try it
 
 ```
 docker compose up --build
 ```
 
-- API: http://localhost:8000 (`/api/v1`, `/health`, `/ready`, `/metrics`,
-  `/ws/events`)
+That starts Redis, the API, a worker, the dashboard, and Prometheus.
+
+- API: http://localhost:8000 (routes under `/api/v1`, plus `/health`, `/ready`, `/metrics`)
 - Dashboard: http://localhost:3000
 - Prometheus: http://localhost:9090
 
-Scale workers: `docker compose up --build --scale worker=3`.
+Submit something:
 
-### Local (no docker)
+```
+curl -s -X POST localhost:8000/api/v1/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"task_type":"echo_task","payload":{"hello":"world"},"priority":9}'
+curl -s localhost:8000/api/v1/tasks/<task_id>
+```
+
+More workers when you want them: `docker compose up --build --scale worker=3`.
+
+No Docker? There is a local path too:
 
 ```
 python3 -m venv .venv && .venv/bin/pip install -e .
@@ -90,53 +54,124 @@ redis-server --daemonize yes --save '' --appendonly no   # dev only, no persiste
 .venv/bin/dtq worker run --concurrency 4
 ```
 
-Submit a task (the worker loads the demo handlers in `examples/tasks` by
-default):
+And `scripts/demo.sh` walks six end-to-end scenarios (retries, the DLQ,
+backpressure, a worker dying mid-task, idempotent submits) against a scratch
+Redis DB if you want to see the moving parts without reading code first.
 
+## How it fits together
+
+```mermaid
+flowchart TB
+    dashboard["dashboard<br/>React SPA, WebSocket client (:3000)"]
+    api["api<br/>FastAPI (:8000)<br/>ingest, reads, admin, WS fanout"]
+    redis[("redis<br/>priority streams p0 to p9, task hashes,<br/>retry schedule, dead-letter stream,<br/>idempotency keys, audit stream")]
+    worker["worker (x N)<br/>poll, claim, execute, plus the<br/>reaper and scheduler loops"]
+
+    dashboard -->|"REST + WS /ws/events"| api
+    api --> redis
+    worker --> redis
 ```
-curl -s -X POST localhost:8000/api/v1/tasks \
-  -H 'Content-Type: application/json' \
-  -d '{"task_type":"echo_task","payload":{"hello":"world"},"priority":9}' | head -c 300
-echo
-curl -s localhost:8000/api/v1/tasks/<task_id>
+
+The life of a task is short to describe. `POST /api/v1/tasks` validates the
+request, writes the task hash, and XADDs to one of ten priority streams (or
+parks the task in the retry schedule if it has a delay). Workers read through
+a shared consumer group with bounded prefetch, flip the task from QUEUED to
+RUNNING with a Lua script so two workers cannot claim the same entry, run the
+handler under a timeout, record the result, publish a lifecycle event, and
+only then XACK. A worker that dies mid-task leaves its entries pending, and
+`XAUTOCLAIM` hands them to a live worker. One worker holds the scheduler
+leader lock and moves due retries back into the streams.
+
+## What you get
+
+- **Strict priorities.** Ten bands per queue, p9 down to p0. A p9 task never
+  waits behind a p0 backlog.
+- **Retries that know when to stop.** Exponential backoff with jitter and a
+  capped delay. Errors are classified per attempt: retryable ones retry,
+  everything else fails fast to the DLQ instead of burning attempts.
+- **Idempotent ingest.** Send an `Idempotency-Key` header and replays return
+  the stored task. A duplicate that arrives while the first is still in
+  flight gets a 409, not a second execution.
+- **A dead-letter stream you can work with.** Bounded and inspectable, with
+  requeue (attempts reset, history kept), discard, and purge. Admin actions
+  land in an audit stream.
+- **Backpressure instead of collapse.** A queue-depth admission gate returns
+  429 with `Retry-After`, payloads are size-capped (413), and worker prefetch
+  and WebSocket buffers are bounded.
+- **Observability.** Prometheus metrics, separate `/health` and `/ready`
+  probes, structured JSON logs, and a WebSocket event stream for the
+  dashboard.
+- **Delayed and cancellable tasks.** `delay_seconds` parks a task until it is
+  due. Cancellation is cooperative for both queued and running tasks.
+
+## Writing a handler
+
+A handler is a function with a decorator. Workers only ever run registered
+handlers, never anything named by a request payload.
+
+```python
+from dtq_worker.registry import TaskContext, task
+
+@task("echo_task")
+def echo_task(payload, ctx: TaskContext):
+    return {"echo": payload, "attempt": ctx.attempt}
 ```
 
-More CLI: `dtq get`, `dtq list`, `dtq cancel`, `dtq dlq list`,
-`dtq retry-dlq`, `dtq queue pause <q>`, `dtq queue stats <q>`.
-Set `DTQ_API_KEY` to require `X-API-Key` (or `--api-key`) for the destructive
-commands.
+Point `DTQ_TASK_MODULES` at your module so the worker imports it at startup,
+and the task type is live. `examples/tasks` has a handful to copy from,
+including a flaky one and an always-failing one for watching retries and the
+DLQ do their thing.
 
-## Delivery semantics
+The CLI covers the day-to-day: `dtq get`, `dtq list`, `dtq cancel`,
+`dtq dlq list`, `dtq retry-dlq`, `dtq queue pause <q>`, `dtq queue stats <q>`.
+Set `DTQ_API_KEY` and the destructive commands require an `X-API-Key` header.
+
+## Numbers, with the context attached
+
+Measured on 2026-10-01 on a 2 vCPU VM with 7 GB of RAM, against a local
+Redis 8.10.2 with persistence off, running the no-op `echo_task`: the ingest
+path took about 1,135 submissions a second. A single task with an idle
+worker went from submit to succeeded in about 106 ms, which is the floor for
+a claim round-trip, a handler call, an outcome write, an event publish, and
+an ACK on this machine. Under a 2,000 task burst the completion rate was
+about 262 tasks a second, so most of the latency there was queueing delay,
+not execution cost. The full method, the raw results, and what actually
+limits throughput are in [docs/performance.md](docs/performance.md), and
+`scripts/load_test.py` reruns the whole thing.
+
+The test suite is 169 tests across unit, integration, and end-to-end; run
+`pytest` and count them yourself.
+
+## Delivery semantics, stated plainly
 
 dtq guarantees **at-least-once** execution. A task is never silently dropped
-while its data exists in Redis, but a handler may run more than once: a crash
-after side effects and before the completion write causes redelivery, and the
-re-execution will repeat those side effects. Duplicate *tasks* are absorbed by
-claim-time checks; duplicate *executions* are inherent to the model. Write
-handlers to be idempotent (see `dtq_tasks.idempotent_operation`), and do not
-treat the WebSocket event stream as a record: it is Redis pub/sub,
-fire-and-forget, with no replay for disconnected clients.
+while its data exists in Redis, but a handler can run more than once: if a
+worker crashes after the side effects and before the completion write, the
+task is redelivered and the side effects happen again. Duplicate tasks are
+absorbed by the claim-time checks; duplicate executions are part of the
+model, so write handlers to be idempotent (`dtq_tasks.idempotent_operation`
+helps). Also, do not treat the WebSocket stream as a record of anything. It
+is Redis pub/sub, fire-and-forget, and a disconnected client misses events
+with no replay.
 
 ## Docs
 
 - [docs/performance.md](docs/performance.md): measured throughput and
-  latency numbers (this machine, local Redis), what limits them, and honest
-  caveats.
-- [docs/observability.md](docs/observability.md): Prometheus metrics,
-  `/health` vs `/ready`, structured logging, WebSocket stream, audit trail,
-  local Prometheus setup.
-- [docs/failure-modes.md](docs/failure-modes.md): crash/restart scenarios,
-  data-loss windows, duplicate execution, operator recovery checklist.
-- [docs/security.md](docs/security.md): trust boundaries, handler execution
-  guarantees, API-key auth, validation limits, what is not protected.
+  latency, the method behind them, and what limits them.
+- [docs/observability.md](docs/observability.md): metrics, probes, logging,
+  the WebSocket stream, and the audit trail.
+- [docs/failure-modes.md](docs/failure-modes.md): crash and restart
+  scenarios, data-loss windows, and the operator recovery checklist.
+- [docs/security.md](docs/security.md): trust boundaries, API-key auth,
+  validation limits, and what is not protected.
 - [docs/threat-model.md](docs/threat-model.md): assets, actors, attack
-  surface, abuse cases, residual risks.
-- [docs/deployment.md](docs/deployment.md): compose topology, scaling,
-  full `DTQ_` env reference, backup/restore, zero-downtime notes.
+  surface, and residual risks.
+- [docs/deployment.md](docs/deployment.md): compose topology, scaling, the
+  full `DTQ_` environment reference, backup and restore.
 - [docs/contributing.md](docs/contributing.md): repo layout, dev setup,
-  tests, lint/typecheck, commit conventions, adding a handler.
-- [CONTRACT.md](CONTRACT.md): the normative spec (sections 1-15). Where code
-  and contract differ, the docs describe the code and note the difference.
+  tests, and commit conventions.
+- [CONTRACT.md](CONTRACT.md): the normative spec, sections 1 to 15. Where
+  the code and the contract disagree, the docs describe the code and say so.
 
 ## License
 
