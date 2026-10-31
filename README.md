@@ -4,6 +4,7 @@
 
 **A distributed task queue on Redis Streams, with the operational parts actually built.**
 
+[![CI](https://github.com/SachuJames/distributed-task-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/SachuJames/distributed-task-queue/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)
@@ -23,7 +24,9 @@ already solve the hard parts: consumer groups, pending entries, and claiming
 work from a dead consumer. The engine is the code around that: claim
 atomically, execute, record the outcome, and only then acknowledge.
 
-## Try it
+**Contents:** [Try it](#-try-it) · [How it fits together](#-how-it-fits-together) · [What you get](#-what-you-get) · [Writing a handler](#-writing-a-handler) · [Numbers](#-numbers-with-the-context-attached) · [Delivery semantics](#-delivery-semantics-stated-plainly) · [Docs](#-docs)
+
+## 🚀 Try it
 
 ```
 docker compose up --build
@@ -60,7 +63,7 @@ successes, retries, the DLQ, backpressure, a worker dying mid-task,
 idempotent submits) against a scratch Redis DB if you want to see the
 moving parts without reading code first.
 
-## How it fits together
+## ⚙️ How it fits together
 
 ```mermaid
 flowchart TB
@@ -84,7 +87,7 @@ only then XACK. A worker that dies mid-task leaves its entries pending, and
 `XAUTOCLAIM` hands them to a live worker. One worker holds the scheduler
 leader lock and moves due retries back into the streams.
 
-## What you get
+## 📦 What you get
 
 - **Strict priorities.** Ten bands per queue, p9 down to p0. A p9 task never
   waits behind a p0 backlog.
@@ -106,7 +109,7 @@ leader lock and moves due retries back into the streams.
 - **Delayed and cancellable tasks.** `delay_seconds` parks a task until it is
   due. Cancellation is cooperative for both queued and running tasks.
 
-## Writing a handler
+## ✍️ Writing a handler
 
 A handler is a function with a decorator. Workers only ever run registered
 handlers, never anything named by a request payload.
@@ -128,7 +131,7 @@ The CLI covers the day-to-day: `dtq get`, `dtq list`, `dtq cancel`,
 `dtq dlq list`, `dtq retry-dlq`, `dtq queue pause <q>`, `dtq queue stats <q>`.
 Set `DTQ_API_KEY` and the destructive commands require an `X-API-Key` header.
 
-## Numbers, with the context attached
+## 📈 Numbers, with the context attached
 
 Measured on 2026-10-01 on a 2 vCPU VM with 7 GB of RAM, against a local
 Redis 8.10.2 with persistence off, running the no-op `echo_task`: the ingest
@@ -144,7 +147,7 @@ limits throughput are in [docs/performance.md](docs/performance.md), and
 The test suite is 169 tests across unit, integration, and end-to-end; run
 `pytest` and count them yourself.
 
-## Delivery semantics, stated plainly
+## 📬 Delivery semantics, stated plainly
 
 dtq guarantees **at-least-once** execution. A task is never silently dropped
 while its data exists in Redis, but a handler can run more than once: if a
@@ -156,7 +159,7 @@ helps). Also, do not treat the WebSocket stream as a record of anything. It
 is Redis pub/sub, fire-and-forget, and a disconnected client misses events
 with no replay.
 
-## Docs
+## 📚 Docs
 
 - [docs/architecture.md](docs/architecture.md): the components, how a
   task flows between them, and where the state lives.
@@ -192,6 +195,6 @@ with no replay.
 - [CONTRACT.md](CONTRACT.md): the normative spec, sections 1 to 15. Where
   the code and the contract disagree, the docs describe the code and say so.
 
-## License
+## 📄 License
 
 Apache License 2.0. See [LICENSE](LICENSE).
