@@ -14,9 +14,9 @@
 dtq takes JSON tasks over HTTP, runs them on a pool of workers, and keeps
 retrying them until they succeed or fail for good and land in the
 dead-letter stream, where you can inspect and requeue them. Priorities,
-retries with
-backoff, idempotent submission, delayed tasks, backpressure, Prometheus
-metrics, a live dashboard. One `docker compose up` and all of it is running.
+retries with backoff, idempotent submission, delayed tasks, backpressure,
+Prometheus metrics, a live dashboard. One `docker compose up` and all of
+it is running.
 
 I built it on Redis Streams rather than a list-based queue because streams
 already solve the hard parts: consumer groups, pending entries, and claiming
