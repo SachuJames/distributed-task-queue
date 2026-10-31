@@ -12,8 +12,9 @@
 </div>
 
 dtq takes JSON tasks over HTTP, runs them on a pool of workers, and keeps
-running them until they succeed, fail for good, or land in the dead-letter
-stream where you can inspect and requeue them. Priorities, retries with
+retrying them until they succeed or fail for good and land in the
+dead-letter stream, where you can inspect and requeue them. Priorities,
+retries with
 backoff, idempotent submission, delayed tasks, backpressure, Prometheus
 metrics, a live dashboard. One `docker compose up` and all of it is running.
 
@@ -50,13 +51,14 @@ No Docker? There is a local path too:
 ```
 python3 -m venv .venv && .venv/bin/pip install -e .
 redis-server --daemonize yes --save '' --appendonly no   # dev only, no persistence
-.venv/bin/python -m uvicorn dtq_api.main:app --port 8000 &
+.venv/bin/uvicorn --factory dtq_api.main:create_app --port 8000 &
 .venv/bin/dtq worker run --concurrency 4
 ```
 
-And `scripts/demo.sh` walks six end-to-end scenarios (retries, the DLQ,
-backpressure, a worker dying mid-task, idempotent submits) against a scratch
-Redis DB if you want to see the moving parts without reading code first.
+And `scripts/demo.sh` walks six end-to-end scenarios (a plain batch of
+successes, retries, the DLQ, backpressure, a worker dying mid-task,
+idempotent submits) against a scratch Redis DB if you want to see the
+moving parts without reading code first.
 
 ## How it fits together
 
@@ -156,6 +158,23 @@ with no replay.
 
 ## Docs
 
+- [docs/architecture.md](docs/architecture.md): the components, how a
+  task flows between them, and where the state lives.
+- [docs/task-lifecycle.md](docs/task-lifecycle.md): the statuses a task
+  moves through and which transitions are allowed.
+- [docs/redis-streams.md](docs/redis-streams.md): the key layout, all of
+  it under the `dtq:` prefix.
+- [docs/retries.md](docs/retries.md): the retry policy, the backoff
+  formula, and how errors get classified.
+- [docs/idempotency.md](docs/idempotency.md): submission idempotency and
+  handler-level dedup, and where each one stops helping.
+- [docs/backpressure.md](docs/backpressure.md): the admission gate, the
+  429 semantics, and every buffer that is bounded.
+- [docs/delivery-guarantees.md](docs/delivery-guarantees.md): what
+  at-least-once does and does not promise.
+- [docs/worker-coordination.md](docs/worker-coordination.md): the four
+  worker loops (poll, reaper, scheduler, heartbeat), claiming, and the
+  scheduler leader lock.
 - [docs/performance.md](docs/performance.md): measured throughput and
   latency, the method behind them, and what limits them.
 - [docs/observability.md](docs/observability.md): metrics, probes, logging,
