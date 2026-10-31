@@ -64,7 +64,7 @@ Run the pieces in separate terminals:
 
 ```
 # API on :8000
-.venv/bin/python -m uvicorn dtq_api.main:app --host 0.0.0.0 --port 8000
+.venv/bin/python -m uvicorn --factory dtq_api.main:create_app --host 0.0.0.0 --port 8000
 
 # worker (loads examples/tasks by default)
 .venv/bin/python -m dtq_worker.main
