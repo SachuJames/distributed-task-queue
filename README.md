@@ -4,7 +4,7 @@
 
 **A distributed task queue on Redis Streams, with the operational parts actually built.**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)
 ![Redis Streams](https://img.shields.io/badge/redis-streams-DC382D.svg)
@@ -175,4 +175,4 @@ with no replay.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](LICENSE).
