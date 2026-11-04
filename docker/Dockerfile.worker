@@ -13,8 +13,7 @@ RUN groupadd --system dtq && useradd --system --gid dtq --create-home dtq
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY packages/ packages/
-COPY apps/worker/ apps/worker/
-COPY apps/cli/ apps/cli/
+COPY apps/ apps/
 COPY examples/ examples/
 
 RUN pip install --upgrade pip && pip install .
